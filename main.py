@@ -28,6 +28,9 @@ class Config(BaseModel):
     la_voz_full_url: Optional[str] = None
     properati_full_url: Optional[str] = None
     database_filename: Optional[str] = 'scrapdep'
+    short_url: Optional[bool] = False
+    clikpw_token: Optional[str] = None
+    hide_price: Optional[bool] = False
 
 
 def main(config_path: str):
@@ -93,6 +96,31 @@ def main(config_path: str):
         # SEND POSTINGS
         posting_repository = PostingRepository()
         unsent_postings = posting_repository.get_unsent_postings()
+
+        # Shorten URL          
+        if config.short_url and config.clikpw_token:
+            import requests
+            import random
+            import string
+            for posting in unsent_postings:
+                random_str = ''.join(random.sample(string.ascii_lowercase, 4))
+                alias_join = ''.join([posting.title,posting.price,random_str])
+                alias =  alias_join.replace(' ', '-').replace('$','').replace('.','-').replace(',','-')
+                alias = alias.replace('!','').replace('á','a').replace('é','e').replace('í','i').replace('ó','o').replace('ú','u')
+                length = len(alias)
+                if length>30:
+                    alias = alias[length - 30 :]
+                
+                response = requests.get(f'https://clik.pw/api?api={config.clikpw_token}&url={posting.url}&alias={alias}')
+                
+                if response.json()['status'] == 'success':
+                    posting.url = response.json()['shortenedUrl']
+
+        # Hide Price
+        if config.hide_price: 
+            for posting in unsent_postings:            
+                posting.price = 'Ver precio'
+
 
         telegram_service = TelegramService(
             bot_token=config.bot_token,
